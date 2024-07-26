@@ -23,7 +23,7 @@
     ```
 
 ### 2. Run Specific Tests
-- Use Maven to run specific test cases:
+- Use ginkgo to run specific test cases:
 
     ```sh
     # run all the focused tests(FDescribe) in go-redis
