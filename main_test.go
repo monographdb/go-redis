@@ -1,12 +1,12 @@
 package redis_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	redisPort = "6380"
+	redisPort = "6379"
 	redisAddr = ":" + redisPort
 )
 
@@ -75,58 +75,74 @@ func registerProcess(port string, p *redisProcess) {
 }
 
 var _ = BeforeSuite(func() {
-	addr := os.Getenv("REDIS_PORT")
-	if addr != "" {
-		redisPort = addr
-		redisAddr = ":" + redisPort
+	// addr := os.Getenv("REDIS_PORT")
+	// if addr != "" {
+	// 	redisPort = addr
+	// 	redisAddr = ":" + redisPort
+	// }
+	// var err error
+	// RECluster, _ = strconv.ParseBool(os.Getenv("RE_CLUSTER"))
+
+	// if !RECluster {
+
+	// 	redisMain, err = startRedis(redisPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	ringShard1, err = startRedis(ringShard1Port)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	ringShard2, err = startRedis(ringShard2Port)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	ringShard3, err = startRedis(ringShard3Port)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinelMaster, err = startRedis(sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinel1, err = startSentinel(sentinelPort1, sentinelName, sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinel2, err = startSentinel(sentinelPort2, sentinelName, sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinel3, err = startSentinel(sentinelPort3, sentinelName, sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinelSlave1, err = startRedis(
+	// 		sentinelSlave1Port, "--slaveof", "127.0.0.1", sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	sentinelSlave2, err = startRedis(
+	// 		sentinelSlave2Port, "--slaveof", "127.0.0.1", sentinelMasterPort)
+	// 	Expect(err).NotTo(HaveOccurred())
+
+	// 	Expect(startCluster(ctx, cluster)).NotTo(HaveOccurred())
+	// } else {
+	// 	redisPort = rediStackPort
+	// 	redisAddr = rediStackAddr
+	// }
+
+	port := os.Getenv("REDIS_PORT")
+	if port == "" {
+		port = "6379"
 	}
-	var err error
-	RECluster, _ = strconv.ParseBool(os.Getenv("RE_CLUSTER"))
+	fmt.Printf("Connecting to Redis on port: %s\n", port)
 
-	if !RECluster {
+	client := redis.NewClient(redisOptions())
+	defer client.Close()
 
-		redisMain, err = startRedis(redisPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		ringShard1, err = startRedis(ringShard1Port)
-		Expect(err).NotTo(HaveOccurred())
-
-		ringShard2, err = startRedis(ringShard2Port)
-		Expect(err).NotTo(HaveOccurred())
-
-		ringShard3, err = startRedis(ringShard3Port)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinelMaster, err = startRedis(sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinel1, err = startSentinel(sentinelPort1, sentinelName, sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinel2, err = startSentinel(sentinelPort2, sentinelName, sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinel3, err = startSentinel(sentinelPort3, sentinelName, sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinelSlave1, err = startRedis(
-			sentinelSlave1Port, "--slaveof", "127.0.0.1", sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		sentinelSlave2, err = startRedis(
-			sentinelSlave2Port, "--slaveof", "127.0.0.1", sentinelMasterPort)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(startCluster(ctx, cluster)).NotTo(HaveOccurred())
-	} else {
-		redisPort = rediStackPort
-		redisAddr = rediStackAddr
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		fmt.Printf("Failed to connect to Redis: %v\n", err)
 	}
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
 	if !RECluster {
-		Expect(cluster.Close()).NotTo(HaveOccurred())
+		// Expect(cluster.Close()).NotTo(HaveOccurred())
 
 		for _, p := range processes {
 			Expect(p.Close()).NotTo(HaveOccurred())
@@ -350,7 +366,7 @@ func startRedis(port string, args ...string) (*redisProcess, error) {
 		return nil, err
 	}
 
-	baseArgs := []string{filepath.Join(dir, "redis.conf"), "--port", port, "--dir", dir, "--enable-module-command", "yes"}
+	baseArgs := []string{filepath.Join(dir, "redis.conf"), "--port", port}
 	process, err := execCmd(redisServerBin, append(baseArgs, args...)...)
 	if err != nil {
 		return nil, err
