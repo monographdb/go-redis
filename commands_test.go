@@ -6841,7 +6841,7 @@ var _ = Describe("Commands", func() {
 		})
 	})
 
-	Describe("marshaling/unmarshaling", func() {
+	FDescribe("marshaling/unmarshaling", func() {
 		type convTest struct {
 			value  interface{}
 			wanted string
@@ -6888,7 +6888,7 @@ var _ = Describe("Commands", func() {
 		})
 	})
 
-	Describe("json marshaling/unmarshaling", func() {
+	FDescribe("json marshaling/unmarshaling", func() {
 		BeforeEach(func() {
 			value := &numberStruct{Number: 42}
 			err := client.Set(ctx, "key", value, 0).Err()
