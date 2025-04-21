@@ -1,6 +1,8 @@
 module github.com/redis/go-redis/v9
 
-go 1.18
+go 1.23.0
+
+toolchain go1.23.1
 
 require (
 	github.com/bsm/ginkgo/v2 v2.12.0
@@ -11,7 +13,8 @@ require (
 
 require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
-	github.com/onsi/ginkgo/v2 v2.19.0 // indirect
-	golang.org/x/tools v0.21.0 // indirect
+	github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 // indirect
+	github.com/onsi/ginkgo/v2 v2.23.4 // indirect
+	go.uber.org/automaxprocs v1.6.0 // indirect
+	golang.org/x/tools v0.31.0 // indirect
 )

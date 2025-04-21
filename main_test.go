@@ -59,7 +59,7 @@ var (
 )
 
 var cluster = &clusterScenario{
-	ports:     []string{"8220", "8221", "8222", "8223", "8224", "8225"},
+	ports:     []string{"6379", "7379", "8379", "4379", "5379", "9379"},
 	nodeIDs:   make([]string, 6),
 	processes: make(map[string]*redisProcess, 6),
 	clients:   make(map[string]*redis.Client, 6),
@@ -204,6 +204,7 @@ func redisClusterOptions() *redis.ClusterOptions {
 		PoolSize:        10,
 		PoolTimeout:     30 * time.Second,
 		ConnMaxIdleTime: time.Minute,
+		// ReadOnly:        true,
 	}
 }
 

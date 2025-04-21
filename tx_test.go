@@ -11,7 +11,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var _ = FDescribe("Tx", func() {
+// TODO(lokax):
+var _ = Describe("Tx", func() {
 	var client *redis.Client
 
 	BeforeEach(func() {

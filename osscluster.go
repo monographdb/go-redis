@@ -995,6 +995,7 @@ func (c *ClusterClient) process(ctx context.Context, cmd Cmder) error {
 
 			var err error
 			node, err = c.nodes.GetOrCreate(addr)
+
 			if err != nil {
 				return err
 			}

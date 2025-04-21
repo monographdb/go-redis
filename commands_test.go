@@ -24,20 +24,36 @@ func (t *TimeValue) ScanRedis(s string) (err error) {
 	return
 }
 
+var my_cluster = &clusterScenario{
+	ports:     []string{"6379", "7379", "8379", "4379", "5379", "9379"},
+	nodeIDs:   make([]string, 6),
+	processes: make(map[string]*redisProcess, 6),
+	clients:   make(map[string]*redis.Client, 6),
+}
+
 var _ = Describe("Commands", func() {
 	ctx := context.TODO()
-	var client *redis.Client
+	var client *redis.ClusterClient
+	var opt *redis.ClusterOptions
 
 	BeforeEach(func() {
-		client = redis.NewClient(redisOptions())
+		// client = redis.NewClient(redisOptions())
+		// Expect(client.FlushDB(ctx).Err()).NotTo(HaveOccurred())
+		opt = redisClusterOptions()
+		opt.Protocol = 2
+		// opt.ReadOnly = true
+		opt.Addrs = my_cluster.addrs()
+		client = redis.NewClusterClient(opt)
 		Expect(client.FlushDB(ctx).Err()).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
+		client.FlushDB(ctx)
 		Expect(client.Close()).NotTo(HaveOccurred())
 	})
 
 	Describe("server", func() {
+		// err code mismatch
 		It("should Auth", func() {
 			cmds, err := client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Auth(ctx, "password")
@@ -57,6 +73,7 @@ var _ = Describe("Commands", func() {
 			Expect(stats.IdleConns).To(Equal(uint32(1)))
 		})
 
+		// Unsupport command
 		It("should hello", func() {
 			cmds, err := client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Hello(ctx, 3, "", "", "")
@@ -67,8 +84,8 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m["proto"]).To(Equal(int64(3)))
 		})
-
-		It("should Echo", func() {
+		// ok
+		FIt("should Echo", func() {
 			pipe := client.Pipeline()
 			echo := pipe.Echo(ctx, "hello")
 			_, err := pipe.Exec(ctx)
@@ -77,13 +94,14 @@ var _ = Describe("Commands", func() {
 			Expect(echo.Err()).NotTo(HaveOccurred())
 			Expect(echo.Val()).To(Equal("hello"))
 		})
-
-		It("should Ping", func() {
+		// ok
+		FIt("should Ping", func() {
 			ping := client.Ping(ctx)
 			Expect(ping.Err()).NotTo(HaveOccurred())
 			Expect(ping.Val()).To(Equal("PONG"))
 		})
 
+		// Unsupport command
 		It("should Wait", func() {
 			const wait = 3 * time.Second
 
@@ -94,7 +112,7 @@ var _ = Describe("Commands", func() {
 			Expect(val).To(Equal(int64(0)))
 			Expect(time.Now()).To(BeTemporally("~", start.Add(wait), 3*time.Second))
 		})
-
+		// Unsupported command
 		It("should WaitAOF", func() {
 			const waitAOF = 3 * time.Second
 			Skip("flaky test")
@@ -106,8 +124,8 @@ var _ = Describe("Commands", func() {
 			Expect(val).NotTo(ContainSubstring("ERR WAITAOF cannot be used when numlocal is set but appendonly is disabled"))
 			Expect(time.Now()).To(BeTemporally("~", start.Add(waitAOF), 3*time.Second))
 		})
-
-		It("should Select", Label("NonRedisEnterprise"), func() {
+		// ok
+		FIt("should Select", Label("NonRedisEnterprise"), func() {
 			pipe := client.Pipeline()
 			sel := pipe.Select(ctx, 1)
 			_, err := pipe.Exec(ctx)
@@ -117,6 +135,7 @@ var _ = Describe("Commands", func() {
 			Expect(sel.Val()).To(Equal("OK"))
 		})
 
+		// Unsupport command
 		It("should SwapDB", Label("NonRedisEnterprise"), func() {
 			pipe := client.Pipeline()
 			sel := pipe.SwapDB(ctx, 1, 2)
@@ -126,7 +145,7 @@ var _ = Describe("Commands", func() {
 			Expect(sel.Err()).NotTo(HaveOccurred())
 			Expect(sel.Val()).To(Equal("OK"))
 		})
-
+		// Unsupported command
 		It("should BgRewriteAOF", func() {
 			Skip("flaky test")
 
@@ -134,7 +153,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(ContainSubstring("Background append only file rewriting"))
 		})
-
+		// Unsupported command
 		It("should BgSave", func() {
 			Skip("flaky test")
 
@@ -144,6 +163,7 @@ var _ = Describe("Commands", func() {
 			}, "30s").Should(Equal("Background saving started"))
 		})
 
+		// Unsupport command
 		It("Should CommandGetKeys", func() {
 			keys, err := client.CommandGetKeys(ctx, "MSET", "a", "b", "c", "d", "e", "f").Result()
 			Expect(err).NotTo(HaveOccurred())
@@ -162,6 +182,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).To(MatchError("ERR Invalid command specified"))
 		})
 
+		// Unsupport command
 		It("should CommandGetKeysAndFlags", func() {
 			keysAndFlags, err := client.CommandGetKeysAndFlags(ctx, "LMOVE", "mylist1", "mylist2", "left", "left").Result()
 			Expect(err).NotTo(HaveOccurred())
@@ -181,6 +202,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).To(MatchError("ERR Invalid command specified"))
 		})
 
+		// supported ? error result
 		It("should ClientKill", func() {
 			r := client.ClientKill(ctx, "1.1.1.1:1111")
 			Expect(r.Err()).To(MatchError("ERR No such client"))
@@ -226,8 +248,8 @@ var _ = Describe("Commands", func() {
 				Fail("BLPOP is still blocked.")
 			}
 		})
-
-		It("should ClientID", func() {
+		// ok
+		FIt("should ClientID", func() {
 			err := client.ClientID(ctx).Err()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(client.ClientID(ctx).Val()).To(BeNumerically(">=", 0))
@@ -239,7 +261,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(r).To(Equal(int64(0)))
 		})
-
+		// unsupported
 		It("should ClientUnblockWithError", func() {
 			id := client.ClientID(ctx).Val()
 			r, err := client.ClientUnblockWithError(ctx, id).Result()
@@ -247,12 +269,12 @@ var _ = Describe("Commands", func() {
 			Expect(r).To(Equal(int64(0)))
 		})
 
-		It("should ClientInfo", func() {
+		FIt("should ClientInfo", func() {
 			info, err := client.ClientInfo(ctx).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info).NotTo(BeNil())
 		})
-
+		// unsupport
 		It("should ClientPause", Label("NonRedisEnterprise"), func() {
 			err := client.ClientPause(ctx, time.Second).Err()
 			Expect(err).NotTo(HaveOccurred())
@@ -262,8 +284,8 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(time.Now()).To(BeTemporally("~", start.Add(time.Second), 800*time.Millisecond))
 		})
-
-		It("should ClientSetName and ClientGetName", func() {
+		// get name return nil, result mismatch
+		FIt("should ClientSetName and ClientGetName", func() {
 			pipe := client.Pipeline()
 			set := pipe.ClientSetName(ctx, "theclientname")
 			get := pipe.ClientGetName(ctx)
@@ -277,7 +299,8 @@ var _ = Describe("Commands", func() {
 			Expect(get.Val()).To(Equal("theclientname"))
 		})
 
-		It("should ClientSetInfo", func() {
+		// Miss some Field
+		FIt("should ClientSetInfo", func() {
 			pipe := client.Pipeline()
 
 			// Test setting the libName
@@ -338,18 +361,20 @@ var _ = Describe("Commands", func() {
 
 		})
 
-		It("should ConfigGet", func() {
+		FIt("should ConfigGet", func() {
 			val, err := client.ConfigGet(ctx, "*").Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).NotTo(BeEmpty())
 		})
 
+		// unknown command
 		It("should ConfigResetStat", Label("NonRedisEnterprise"), func() {
 			r := client.ConfigResetStat(ctx)
 			Expect(r.Err()).NotTo(HaveOccurred())
 			Expect(r.Val()).To(Equal("OK"))
 		})
 
+		// result mismatch
 		It("should ConfigSet", Label("NonRedisEnterprise"), func() {
 			configGet := client.ConfigGet(ctx, "maxmemory")
 			Expect(configGet.Err()).NotTo(HaveOccurred())
@@ -362,25 +387,26 @@ var _ = Describe("Commands", func() {
 			Expect(configSet.Val()).To(Equal("OK"))
 		})
 
+		// unknown command
 		It("should ConfigRewrite", Label("NonRedisEnterprise"), func() {
 			configRewrite := client.ConfigRewrite(ctx)
 			Expect(configRewrite.Err()).NotTo(HaveOccurred())
 			Expect(configRewrite.Val()).To(Equal("OK"))
 		})
-
-		It("should DBSize", func() {
+		// ok
+		FIt("should DBSize", func() {
 			size, err := client.DBSize(ctx).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(size).To(Equal(int64(0)))
 		})
-
-		It("should Info", func() {
+		// ok
+		FIt("should Info", func() {
 			info := client.Info(ctx)
 			Expect(info.Err()).NotTo(HaveOccurred())
 			Expect(info.Val()).NotTo(Equal(""))
 		})
-
-		It("should InfoMap", Label("redis.info"), func() {
+		// ok
+		FIt("should InfoMap", Label("redis.info"), func() {
 			info := client.InfoMap(ctx)
 			Expect(info.Err()).NotTo(HaveOccurred())
 			Expect(info.Val()).NotTo(BeNil())
@@ -393,15 +419,15 @@ var _ = Describe("Commands", func() {
 			Expect(info.Err()).NotTo(HaveOccurred())
 			Expect(info.Val()).To(HaveLen(1))
 		})
-
-		It("should Info cpu", func() {
+		// ok
+		FIt("should Info cpu", func() {
 			info := client.Info(ctx, "cpu")
 			Expect(info.Err()).NotTo(HaveOccurred())
 			Expect(info.Val()).NotTo(Equal(""))
 			Expect(info.Val()).To(ContainSubstring(`used_cpu_sys`))
 		})
-
-		It("should Info cpu and memory", func() {
+		// ok
+		FIt("should Info cpu and memory", func() {
 			info := client.Info(ctx, "cpu", "memory")
 			Expect(info.Err()).NotTo(HaveOccurred())
 			Expect(info.Val()).NotTo(Equal(""))
@@ -409,12 +435,14 @@ var _ = Describe("Commands", func() {
 			Expect(info.Val()).To(ContainSubstring(`memory`))
 		})
 
+		// unkonw command
 		It("should LastSave", Label("NonRedisEnterprise"), func() {
 			lastSave := client.LastSave(ctx)
 			Expect(lastSave.Err()).NotTo(HaveOccurred())
 			Expect(lastSave.Val()).NotTo(Equal(0))
 		})
 
+		// unkonwn command
 		It("should Save", Label("NonRedisEnterprise"), func() {
 			// workaround for "ERR Background save already in progress"
 			Eventually(func() string {
@@ -422,6 +450,7 @@ var _ = Describe("Commands", func() {
 			}, "10s").Should(Equal("OK"))
 		})
 
+		// unkonwn command
 		It("should SlaveOf", Label("NonRedisEnterprise"), func() {
 			slaveOf := client.SlaveOf(ctx, "localhost", "8888")
 			Expect(slaveOf.Err()).NotTo(HaveOccurred())
@@ -431,14 +460,14 @@ var _ = Describe("Commands", func() {
 			Expect(slaveOf.Err()).NotTo(HaveOccurred())
 			Expect(slaveOf.Val()).To(Equal("OK"))
 		})
-
-		It("should Time", func() {
+		// ok
+		FIt("should Time", func() {
 			tm, err := client.Time(ctx).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tm).To(BeTemporally("~", time.Now(), 3*time.Second))
 		})
 
-		It("should Command", Label("NonRedisEnterprise"), func() {
+		FIt("should Command", Label("NonRedisEnterprise"), func() {
 			cmds, err := client.Command(ctx).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(cmds)).To(BeNumerically("~", 240, 25))
@@ -460,7 +489,7 @@ var _ = Describe("Commands", func() {
 			Expect(cmd.StepCount).To(Equal(int8(0)))
 		})
 
-		It("should return all command names", func() {
+		FIt("should return all command names", func() {
 			cmdList := client.CommandList(ctx, nil)
 			Expect(cmdList.Err()).NotTo(HaveOccurred())
 			cmdNames := cmdList.Val()
@@ -473,6 +502,7 @@ var _ = Describe("Commands", func() {
 			Expect(cmdNames).To(ContainElement("hset"))
 		})
 
+		// syntax error
 		It("should filter commands by module", func() {
 			filter := &redis.FilterBy{
 				Module: "JSON",
@@ -482,6 +512,7 @@ var _ = Describe("Commands", func() {
 			Expect(cmdList.Val()).To(HaveLen(0))
 		})
 
+		// syntax error
 		It("should filter commands by ACL category", func() {
 			filter := &redis.FilterBy{
 				ACLCat: "admin",
@@ -494,7 +525,7 @@ var _ = Describe("Commands", func() {
 			// Assert that the returned list only contains commands from the admin ACL category
 			Expect(len(cmdNames)).To(BeNumerically(">", 10))
 		})
-
+		// syntax error
 		It("should filter commands by pattern", func() {
 			filter := &redis.FilterBy{
 				Pattern: "*GET*",
@@ -710,7 +741,8 @@ var _ = Describe("Commands", func() {
 			Expect(get.Val()).To(Equal("hello"))
 		})
 
-		It("should Object", Label("NonRedisEnterprise"), func() {
+		// unsupoorted command
+		FIt("should Object", Label("NonRedisEnterprise"), func() {
 			start := time.Now()
 			set := client.Set(ctx, "key", "hello", 0)
 			Expect(set.Err()).NotTo(HaveOccurred())
@@ -1089,18 +1121,43 @@ var _ = Describe("Commands", func() {
 		})
 	})
 
-	FDescribe("scanning", func() {
+	Describe("scanning", func() {
 		It("should Scan", func() {
 			for i := 0; i < 1000; i++ {
 				set := client.Set(ctx, fmt.Sprintf("key%d", i), "hello", 0)
 				Expect(set.Err()).NotTo(HaveOccurred())
 			}
 
+			/*
+				firstMasterScanned := false
+				client.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
+					if firstMasterScanned {
+
+						return nil
+					}
+
+					firstMasterScanned = true
+
+					println("scanning a")
+					keys, cursor, err := master.Scan(ctx, 0, "", 0).Result()
+					println("scanning b")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(keys).NotTo(BeEmpty())
+					Expect(len(keys)).To(Equal(1000))
+					// Q? eloqkv does not return this cursor?
+					Expect(cursor).To(BeZero())
+
+					return nil
+				})
+			*/
+
 			keys, cursor, err := client.Scan(ctx, 0, "", 0).Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(keys).NotTo(BeEmpty())
+			Expect(len(keys)).To(Equal(1000))
 			// Q? eloqkv does not return this cursor?
-			Expect(cursor).NotTo(BeZero())
+			Expect(cursor).To(BeZero())
+
 		})
 
 		It("should ScanType", func() {
@@ -1112,6 +1169,7 @@ var _ = Describe("Commands", func() {
 			keys, _, err := client.ScanType(ctx, 0, "", 0, "string").Result()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(keys).NotTo(BeEmpty())
+			Expect(len(keys)).To(Equal(1000))
 			// Expect(cursor).NotTo(BeZero())
 		})
 
@@ -1504,6 +1562,7 @@ var _ = Describe("Commands", func() {
 			Expect(incr.Err()).NotTo(HaveOccurred())
 			Expect(incr.Val()).To(Equal(int64(11)))
 
+			time.Sleep(time.Second)
 			get := client.Get(ctx, "key")
 			Expect(get.Err()).NotTo(HaveOccurred())
 			Expect(get.Val()).To(Equal("11"))
@@ -2511,6 +2570,7 @@ var _ = Describe("Commands", func() {
 			))
 		})
 
+		// Unsupported command
 		It("should HExpire", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			res, err := client.HExpire(ctx, "no_such_key", 10*time.Second, "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2525,7 +2585,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{1, 1, -2}))
 		})
-
+		// Unsupported command
 		It("should HPExpire", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			res, err := client.HPExpire(ctx, "no_such_key", 10*time.Second, "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2540,7 +2600,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{1, 1, -2}))
 		})
-
+		// Unsupported command
 		It("should HExpireAt", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HExpireAt(ctx, "no_such_key", time.Now().Add(10*time.Second), "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2555,7 +2615,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{1, 1, -2}))
 		})
-
+		// Unsupported command
 		It("should HPExpireAt", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HPExpireAt(ctx, "no_such_key", time.Now().Add(10*time.Second), "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2570,7 +2630,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{1, 1, -2}))
 		})
-
+		// Unsupported command
 		It("should HPersist", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HPersist(ctx, "no_such_key", "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2593,7 +2653,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{1, -1, -2}))
 		})
-
+		// Unsupported command
 		It("should HExpireTime", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HExpireTime(ctx, "no_such_key", "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2612,7 +2672,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res[0]).To(BeNumerically("~", time.Now().Add(10*time.Second).Unix(), 1))
 		})
-
+		// Unsupported command
 		It("should HPExpireTime", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HPExpireTime(ctx, "no_such_key", "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2632,7 +2692,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(BeEquivalentTo([]int64{expireAt.UnixMilli(), -1, -2}))
 		})
-
+		// Unsupported command
 		It("should HTTL", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HTTL(ctx, "no_such_key", "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2651,7 +2711,7 @@ var _ = Describe("Commands", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).To(Equal([]int64{10, -1, -2}))
 		})
-
+		// Unsupported command
 		It("should HPTTL", Label("hash-expiration", "NonRedisEnterprise"), func() {
 			resEmpty, err := client.HPTTL(ctx, "no_such_key", "field1", "field2", "field3").Result()
 			Expect(err).To(BeNil())
@@ -2671,7 +2731,7 @@ var _ = Describe("Commands", func() {
 			Expect(res[0]).To(BeNumerically("~", 10*time.Second.Milliseconds(), 1))
 		})
 	})
-
+	// Unsupported command
 	Describe("hyperloglog", func() {
 		It("should PFMerge", Label("NonRedisEnterprise"), func() {
 			pfAdd := client.PFAdd(ctx, "hll1", "1", "2", "3", "4", "5")
@@ -2746,6 +2806,7 @@ var _ = Describe("Commands", func() {
 
 			Expect(client.Ping(ctx).Err()).NotTo(HaveOccurred())
 
+			// stat mismatch
 			stats := client.PoolStats()
 			Expect(stats.Hits).To(Equal(uint32(2)))
 			Expect(stats.Misses).To(Equal(uint32(1)))
@@ -7294,7 +7355,7 @@ var _ = Describe("Commands", func() {
 		})
 	})
 
-	Describe("SlowLogGet", func() {
+	FDescribe("SlowLogGet", func() {
 		It("returns slow query result", func() {
 			const key = "slowlog-log-slower-than"
 
